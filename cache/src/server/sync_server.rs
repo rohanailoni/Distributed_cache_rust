@@ -1,6 +1,6 @@
 
 use std::ffi::CString;
-use std::io;
+use std::{io, thread, time};
 use std::io::{BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
@@ -76,7 +76,7 @@ fn process_command(command:String)-> Result<Command, &'static str> {
 pub(crate) fn runSyncTCPServer(){
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     for stream in listener.incoming() {
-
+        let now = time::Instant::now();
         match stream{
             Ok(mut stream) => {
                 match read_command(stream.try_clone().unwrap()){
@@ -101,7 +101,8 @@ pub(crate) fn runSyncTCPServer(){
         }
 
 
-
+        thread::sleep( time::Duration::from_secs(4));
+        println!("The elasped time in {:?}",now.elapsed());
 
     }
 }

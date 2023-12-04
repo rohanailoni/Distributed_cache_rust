@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 use std::net::{IpAddr, Ipv4Addr};
-use std::ptr;
+use std::{ptr, thread, time};
 use std::str::FromStr;
 use inet_aton::inet_aton;
 use libc::{accept, sockaddr};
@@ -9,6 +9,7 @@ use log::{info};
 
 
 pub(crate) unsafe fn run_async_tcp_server(){
+    let now = time::Instant::now();
     println!("starting the asynchronous service");
 
     const MAX_CLIENTS:usize=100;
@@ -124,19 +125,20 @@ pub(crate) unsafe fn run_async_tcp_server(){
         let mut first_even =false;
         if event>0{
             for i in 0..event{
+
                 let x=events[i as usize];
                 if x.events!=0 && x.u64!=0{
                     println!("The server file descriptor is {} and the epoll event has event as {} and {} and length events detected {}",serverFD, { x.events }, { x.u64 },event);
                 }
                 //that means we are directly pinging the socket itself
                 if x.u64== serverFD as u64{
-                    let clientFD= libc::accept(serverFD, &mut socker_address as *mut _ as *mut libc::sockaddr, &mut address_size);
+                    let client_fd = libc::accept(serverFD, &mut socker_address as *mut _ as *mut libc::sockaddr, &mut address_size);
 
-                    if clientFD<0{
+                    if client_fd <0{
                         println!("Accept Failed with error expression {err} check the doc for the error");
                         return;
                     }
-                    match set_nonblock(clientFD,true){
+                    match set_nonblock(client_fd, true){
                         Ok(()) => {
                             println!("setting non blocking for clientsuccessful");
                         }
@@ -146,9 +148,9 @@ pub(crate) unsafe fn run_async_tcp_server(){
                     }
                     let mut first_client_event =libc::epoll_event{
                         events: libc::EPOLLIN as u32,
-                        u64: clientFD as u64,
+                        u64: client_fd as u64,
                     };
-                    let err=libc::epoll_ctl(epoll_fd,libc::EPOLL_CTL_ADD,clientFD,&mut first_client_event);
+                    let err=libc::epoll_ctl(epoll_fd, libc::EPOLL_CTL_ADD, client_fd, &mut first_client_event);
                     if err<0{
                         println!("failed to add client to epoll instance failed with error {err}");
                         return;
@@ -156,21 +158,17 @@ pub(crate) unsafe fn run_async_tcp_server(){
                     println!("succcessfull added clientFd to epoll instance");
 
                 }else{
+                    let now =2 time::Instant::now();
                     let mut buffer = [0; 1024];
                     let read_bytes=libc::read(x.u64 as libc::c_int, buffer.as_mut_ptr() as *mut libc::c_void, buffer.len());
                     libc::write(x.u64 as libc::c_int, buffer.as_ptr() as *const libc::c_void, read_bytes as libc::size_t);
                     println!("reading the bytes from descriptor {} and the buffer is {:?}",{x.u64},String::from_utf8_lossy(&buffer));
                     libc::close(x.u64 as libc::c_int);
-                    if !first_even{
-
-                        first_even=true;
-                        break;
-                    }
+                    thread::sleep( time::Duration::from_secs(4));
+                    println!("The elasped time in {:?}",now.elapsed());
                 }
             }
-            if first_even{
-                //break;
-            }
+
         }
         println!("Ending the loop");
     }
